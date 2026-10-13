@@ -111,8 +111,10 @@ function setSlackWebhook() {
 }
 
 function testSlack() {
-  postToSlack_('【テスト】売上方程式 診断ツールからの通知テストです。');
-  SpreadsheetApp.getUi().alert('Slackにテスト通知を送りました。CSチャンネルを確認してください。');
+  const sent = postToSlack_('【テスト】売上方程式 診断ツールからの通知テストです。');
+  SpreadsheetApp.getUi().alert(sent
+    ? 'Slackにテスト通知を送りました。CSチャンネルを確認してください。'
+    : 'Slackの通知先がまだ設定されていません。「1. Slackの通知先を設定」から設定してください。');
 }
 
 function rebuildReportForRow() {
@@ -125,8 +127,8 @@ function rebuildReportForRow() {
     return;
   }
   const report = buildReport_(row);
-  notifyResult_(report);
-  ui.alert('診断シートを作成し、Slackに通知しました。\n' + report.url);
+  const sent = notifyResult_(report);
+  ui.alert('診断シートを作成しました' + (sent ? '（Slackにも通知しました）' : '') + '。\n' + report.url);
 }
 
 // ---------------------------------------------------------------------------
@@ -517,12 +519,16 @@ function notifyResult_(report) {
     '総合点 ' + report.total + '点／一番弱い項目：' + report.weakest,
     '診断シートはこちら ' + report.url,
   ].join('\n');
-  postToSlack_(text);
+  return postToSlack_(text);
 }
 
+// Slackの通知先が未設定のときは何もせず false を返す（診断シートの作成は止めない）
 function postToSlack_(text) {
   const url = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
-  if (!url) throw new Error('Slackの通知先が未設定です。メニュー「診断ツール」→「1. Slackの通知先を設定」から設定してください。');
+  if (!url) {
+    console.log('Slackの通知先が未設定のため、通知を送りませんでした：\n' + text);
+    return false;
+  }
   const res = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
@@ -532,6 +538,7 @@ function postToSlack_(text) {
   if (res.getResponseCode() !== 200) {
     throw new Error('Slackへの通知に失敗しました（' + res.getResponseCode() + '）：' + res.getContentText());
   }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
